@@ -84,6 +84,14 @@ class KitchenOwlClient:
         r.raise_for_status()
         return r.json()
 
+    async def update_shopping_item(
+        self, list_id: int, item_id: int, description: str
+    ) -> dict:
+        url = f"{self._base}/api/shoppinglist/{list_id}/item/{item_id}"
+        r = await self._http.put(url, json={"description": description})
+        r.raise_for_status()
+        return r.json()
+
     async def remove_shopping_item(self, list_id: int, item_id: int) -> None:
         url = f"{self._base}/api/shoppinglist/{list_id}/item"
         r = await self._http.request("DELETE", url, json={"item_id": item_id})
