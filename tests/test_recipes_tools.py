@@ -35,6 +35,12 @@ class FakeKitchenOwlClient:
         return payload
 
 
+class RejectingImageClient(FakeKitchenOwlClient):
+    async def update_recipe(self, recipe_id: int, payload: dict) -> dict:
+        self.update_payload = payload
+        return self._recipe
+
+
 @contextmanager
 def _active_client(client: FakeKitchenOwlClient):
     state._client = client
@@ -108,6 +114,46 @@ def test_update_recipe_carries_quantity_for_dict_ingredients() -> None:
     items_by_name = {i["name"]: i for i in client.update_payload["items"]}
     assert items_by_name["flour"]["description"] == "2 cups"
     assert items_by_name["salt"]["description"] == ""
+
+
+def test_set_recipe_image_updates_only_photo() -> None:
+    with _active_client(_make_fake_client()) as client:
+        result = asyncio.run(
+            recipes.set_recipe_image(
+                1, "  https://images.example.test/omelet.webp?size=large  "
+            )
+        )
+
+    assert client.update_payload == {
+        "photo": "https://images.example.test/omelet.webp?size=large"
+    }
+    assert result["photo"] == "https://images.example.test/omelet.webp?size=large"
+
+
+@pytest.mark.parametrize(
+    "image_url",
+    [
+        "",
+        "http://images.example.test/omelet.jpg",
+        "https://",
+        "https://user:password@images.example.test/omelet.jpg",
+    ],
+)
+def test_set_recipe_image_rejects_unsafe_url(image_url: str) -> None:
+    with _active_client(_make_fake_client()) as client:
+        with pytest.raises(ValueError, match="image_url"):
+            asyncio.run(recipes.set_recipe_image(1, image_url))
+
+    assert client.update_payload is None
+
+
+def test_set_recipe_image_reports_kitchenowl_rejection() -> None:
+    recipe = _make_fake_client()._recipe
+    with _active_client(RejectingImageClient(recipe=recipe)):
+        with pytest.raises(ValueError, match="did not accept"):
+            asyncio.run(
+                recipes.set_recipe_image(1, "https://images.example.test/not-an-image")
+            )
 
 
 def test_resolve_ingredient_items_rejects_malformed_dict_entry() -> None:

@@ -15,6 +15,10 @@ def test_destructive_tools_are_a_subset_of_registered_tools() -> None:
     assert dispatch.DESTRUCTIVE_TOOLS <= set(dispatch.TOOL_FUNCTIONS)
 
 
+def test_recipe_image_updates_require_confirmation() -> None:
+    assert "set_recipe_image" in dispatch.DESTRUCTIVE_TOOLS
+
+
 def test_get_anthropic_tools_raises_before_priming() -> None:
     tool_schemas._CACHED_TOOLS = None
     with pytest.raises(RuntimeError, match="not primed"):

@@ -7,6 +7,7 @@ from .recipes import (
     list_tags,
     mark_recipe_made,
     search_recipes,
+    set_recipe_image,
     update_recipe,
 )
 from .shopping import (
@@ -22,6 +23,7 @@ ALL_TOOLS = [
     get_recipe,
     create_recipe,
     update_recipe,
+    set_recipe_image,
     delete_recipe,
     list_tags,
     mark_recipe_made,
