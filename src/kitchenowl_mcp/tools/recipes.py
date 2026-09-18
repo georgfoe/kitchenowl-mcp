@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import urlsplit
 
 from .. import state
 from ..client import KitchenOwlClient
@@ -196,6 +197,35 @@ async def update_recipe(
         payload["items"] = [i.model_dump() for i in items]
 
     return await client.update_recipe(recipe_id, payload)
+
+
+async def set_recipe_image(recipe_id: int, image_url: str) -> dict:
+    """Download an HTTPS image and set it as an existing recipe's photo.
+
+    Use search_recipes() to find the recipe_id. image_url must be a direct,
+    publicly reachable HTTPS URL. KitchenOwl downloads and persists the image,
+    then returns the updated recipe including its stored photo filename.
+    Replaces the current recipe image when one already exists.
+    """
+    image_url = image_url.strip()
+    if len(image_url) > 2048:
+        raise ValueError("image_url must not exceed 2048 characters")
+
+    parsed = urlsplit(image_url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("image_url must be an absolute HTTPS URL")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("image_url must not contain embedded credentials")
+
+    client = state.get_client()
+    current = await client.get_recipe(recipe_id)
+    updated = await client.update_recipe(recipe_id, {"photo": image_url})
+    if updated.get("photo") == current.get("photo"):
+        raise ValueError(
+            "KitchenOwl did not accept the image URL; ensure it points directly "
+            "to a supported public image"
+        )
+    return updated
 
 
 async def list_tags() -> list[dict]:

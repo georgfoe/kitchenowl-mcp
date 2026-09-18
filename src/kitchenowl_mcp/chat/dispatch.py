@@ -5,5 +5,10 @@ from ..tools import registry
 TOOL_FUNCTIONS: dict[str, Callable] = {fn.__name__: fn for fn in registry.ALL_TOOLS}
 
 DESTRUCTIVE_TOOLS: frozenset[str] = frozenset(
-    {"delete_recipe", "clear_checked_items", "update_recipe"}
+    {
+        "delete_recipe",
+        "clear_checked_items",
+        "update_recipe",
+        "set_recipe_image",
+    }
 )
