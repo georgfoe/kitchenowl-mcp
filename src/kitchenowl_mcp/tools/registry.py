@@ -9,7 +9,12 @@ from .recipes import (
     search_recipes,
     update_recipe,
 )
-from .shopping import add_shopping_list_items, clear_checked_items, get_shopping_list
+from .shopping import (
+    add_shopping_list_items,
+    clear_checked_items,
+    get_shopping_list,
+    update_shopping_list_item,
+)
 
 ALL_TOOLS = [
     # Recipes
@@ -24,6 +29,7 @@ ALL_TOOLS = [
     # Shopping list
     get_shopping_list,
     add_shopping_list_items,
+    update_shopping_list_item,
     clear_checked_items,
     # Meal plan
     get_meal_plan,
