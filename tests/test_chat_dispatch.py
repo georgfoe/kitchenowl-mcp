@@ -19,6 +19,10 @@ def test_recipe_image_updates_require_confirmation() -> None:
     assert "set_recipe_image" in dispatch.DESTRUCTIVE_TOOLS
 
 
+def test_category_deletion_requires_confirmation() -> None:
+    assert "delete_category" in dispatch.DESTRUCTIVE_TOOLS
+
+
 def test_get_anthropic_tools_raises_before_priming() -> None:
     tool_schemas._CACHED_TOOLS = None
     with pytest.raises(RuntimeError, match="not primed"):
