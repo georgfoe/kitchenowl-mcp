@@ -14,6 +14,7 @@ class FakeKitchenOwlClient:
         self._recipe = recipe
         self._recipes = recipes if recipes is not None else ([recipe] if recipe else [])
         self.update_payload: dict | None = None
+        self.created_items: list[dict] = []
 
     async def get_recipe(self, recipe_id: int) -> dict:
         return self._recipe
@@ -32,6 +33,7 @@ class FakeKitchenOwlClient:
         return []
 
     async def create_item(self, payload: dict) -> dict:
+        self.created_items.append(payload)
         return payload
 
 
@@ -99,6 +101,23 @@ def test_create_recipe_carries_quantity_for_dict_ingredients() -> None:
     assert items_by_name["eggs"]["description"] == "3"
 
 
+def test_create_recipe_carries_optional_status_for_dict_ingredients() -> None:
+    with _active_client(FakeKitchenOwlClient()):
+        result = asyncio.run(
+            recipes.create_recipe(
+                name="Pancakes",
+                ingredients=[
+                    {"name": "berries", "amount": "1", "unit": "cup", "optional": True},
+                    "salt",
+                ],
+            )
+        )
+
+    items_by_name = {i["name"]: i for i in result["items"]}
+    assert items_by_name["berries"]["optional"] is True
+    assert items_by_name["salt"]["optional"] is False
+
+
 def test_update_recipe_carries_quantity_for_dict_ingredients() -> None:
     with _active_client(_make_fake_client()) as client:
         asyncio.run(
@@ -114,6 +133,177 @@ def test_update_recipe_carries_quantity_for_dict_ingredients() -> None:
     items_by_name = {i["name"]: i for i in client.update_payload["items"]}
     assert items_by_name["flour"]["description"] == "2 cups"
     assert items_by_name["salt"]["description"] == ""
+
+
+def test_update_recipe_supports_metadata_fields() -> None:
+    with _active_client(_make_fake_client()) as client:
+        asyncio.run(
+            recipes.update_recipe(
+                1,
+                prep_time=10,
+                cook_time=20,
+                total_time=30,
+                yields=4,
+                source="Family cookbook",
+                visibility=1,
+            )
+        )
+
+    assert client.update_payload == {
+        "prep_time": 10,
+        "cook_time": 20,
+        "time": 30,
+        "yields": 4,
+        "source": "Family cookbook",
+        "visibility": 1,
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("prep_time", -1, "prep_time"),
+        ("cook_time", True, "cook_time"),
+        ("total_time", -1, "time"),
+        ("yields", -1, "yields"),
+        ("visibility", 3, "visibility"),
+    ],
+)
+def test_update_recipe_rejects_invalid_metadata(
+    field: str, value: int, message: str
+) -> None:
+    with _active_client(_make_fake_client()) as client:
+        with pytest.raises(ValueError, match=message):
+            asyncio.run(recipes.update_recipe(1, **{field: value}))
+
+    assert client.update_payload is None
+
+
+def test_update_recipe_validates_before_resolving_ingredients() -> None:
+    with _active_client(_make_fake_client()) as client:
+        with pytest.raises(ValueError, match="visibility"):
+            asyncio.run(
+                recipes.update_recipe(
+                    1,
+                    ingredients=[{"name": "new ingredient"}],
+                    visibility=3,
+                )
+            )
+
+    assert client.created_items == []
+    assert client.update_payload is None
+
+
+def test_update_recipe_requires_a_change() -> None:
+    with _active_client(_make_fake_client()) as client:
+        with pytest.raises(ValueError, match="at least one"):
+            asyncio.run(recipes.update_recipe(1))
+
+    assert client.update_payload is None
+
+
+def _make_recipe_with_items() -> FakeKitchenOwlClient:
+    return FakeKitchenOwlClient(
+        recipe={
+            "id": 1,
+            "name": "Pancakes",
+            "description": "",
+            "items": [
+                {
+                    "id": 10,
+                    "name": "Flour",
+                    "description": "2 cups",
+                    "optional": False,
+                    "category": {"id": 2, "name": "Baking"},
+                },
+                {
+                    "id": 11,
+                    "name": "Berries",
+                    "description": "1 cup",
+                    "optional": True,
+                    "icon": "strawberry",
+                },
+            ],
+        }
+    )
+
+
+def test_update_recipe_ingredient_sets_optional_and_preserves_other_items() -> None:
+    with _active_client(_make_recipe_with_items()) as client:
+        asyncio.run(recipes.update_recipe_ingredient(1, 10, optional=True))
+
+    assert client.update_payload == {
+        "items": [
+            {"name": "Flour", "description": "2 cups", "optional": True},
+            {"name": "Berries", "description": "1 cup", "optional": True},
+        ]
+    }
+
+
+def test_update_recipe_ingredient_changes_quantity_only() -> None:
+    with _active_client(_make_recipe_with_items()) as client:
+        asyncio.run(recipes.update_recipe_ingredient(1, 11, quantity="to taste"))
+
+    assert client.update_payload["items"] == [
+        {"name": "Flour", "description": "2 cups", "optional": False},
+        {"name": "Berries", "description": "to taste", "optional": True},
+    ]
+
+
+def test_update_recipe_ingredient_requires_a_change() -> None:
+    with _active_client(_make_recipe_with_items()) as client:
+        with pytest.raises(ValueError, match="optional and/or quantity"):
+            asyncio.run(recipes.update_recipe_ingredient(1, 10))
+
+    assert client.update_payload is None
+
+
+def test_update_recipe_ingredient_rejects_non_boolean_optional() -> None:
+    with _active_client(_make_recipe_with_items()) as client:
+        with pytest.raises(ValueError, match="optional must be true or false"):
+            asyncio.run(recipes.update_recipe_ingredient(1, 10, optional="yes"))
+
+    assert client.update_payload is None
+
+
+def test_update_recipe_ingredient_rejects_item_outside_recipe() -> None:
+    with _active_client(_make_recipe_with_items()) as client:
+        with pytest.raises(ValueError, match="not an ingredient"):
+            asyncio.run(recipes.update_recipe_ingredient(1, 999, optional=True))
+
+    assert client.update_payload is None
+
+
+def test_add_recipe_ingredient_preserves_existing_items() -> None:
+    with _active_client(_make_recipe_with_items()) as client:
+        asyncio.run(
+            recipes.add_recipe_ingredient(
+                1, "Maple syrup", amount="2", unit="tbsp", optional=True
+            )
+        )
+
+    assert client.update_payload["items"] == [
+        {"name": "Flour", "description": "2 cups", "optional": False},
+        {"name": "Berries", "description": "1 cup", "optional": True},
+        {"name": "Maple syrup", "description": "2 tbsp", "optional": True},
+    ]
+
+
+def test_add_recipe_ingredient_rejects_duplicate_name_case_insensitively() -> None:
+    with _active_client(_make_recipe_with_items()) as client:
+        with pytest.raises(ValueError, match="already contains"):
+            asyncio.run(recipes.add_recipe_ingredient(1, "flour"))
+
+    assert client.update_payload is None
+
+
+def test_remove_recipe_ingredient_preserves_other_items() -> None:
+    with _active_client(_make_recipe_with_items()) as client:
+        asyncio.run(recipes.remove_recipe_ingredient(1, 10))
+
+    assert client.update_payload == {
+        "items": [{"name": "Berries", "description": "1 cup", "optional": True}]
+    }
 
 
 def test_set_recipe_image_updates_only_photo() -> None:
@@ -160,6 +350,17 @@ def test_resolve_ingredient_items_rejects_malformed_dict_entry() -> None:
     with _active_client(FakeKitchenOwlClient()) as client:
         with pytest.raises(ValueError, match="non-empty 'name'"):
             asyncio.run(recipes.resolve_ingredient_items(client, [{"amount": "2"}]))
+
+
+def test_resolve_ingredient_items_rejects_non_boolean_optional() -> None:
+    with _active_client(FakeKitchenOwlClient()) as client:
+        with pytest.raises(ValueError, match="must be true or false"):
+            asyncio.run(
+                recipes.resolve_ingredient_items(
+                    client, [{"name": "berries", "optional": "yes"}]
+                )
+            )
+        assert client.created_items == []
 
 
 def test_audit_flags_legacy_recipe_missing_ingredients_and_blank_item_name() -> None:

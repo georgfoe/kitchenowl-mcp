@@ -19,6 +19,14 @@ def test_recipe_image_updates_require_confirmation() -> None:
     assert "set_recipe_image" in dispatch.DESTRUCTIVE_TOOLS
 
 
+def test_recipe_ingredient_changes_require_confirmation() -> None:
+    assert {
+        "add_recipe_ingredient",
+        "update_recipe_ingredient",
+        "remove_recipe_ingredient",
+    } <= dispatch.DESTRUCTIVE_TOOLS
+
+
 def test_category_deletion_requires_confirmation() -> None:
     assert "delete_category" in dispatch.DESTRUCTIVE_TOOLS
 

@@ -25,19 +25,67 @@ def _ingredient_name(entry: str | dict) -> str:
     return name
 
 
+def _ingredient_optional(entry: str | dict) -> bool:
+    optional = entry.get("optional", False) if isinstance(entry, dict) else False
+    if not isinstance(optional, bool):
+        raise ValueError(
+            f"Ingredient 'optional' must be true or false; got {optional!r}"
+        )
+    return optional
+
+
+def _recipe_items_for_write(raw_items: list[dict]) -> list[dict]:
+    """Convert API recipe items to KitchenOwl's strict write schema."""
+    items = []
+    for raw_item in raw_items:
+        name = raw_item.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("Recipe contains an ingredient without a valid name")
+        optional = raw_item.get("optional", False)
+        if not isinstance(optional, bool):
+            raise ValueError(
+                f"Recipe ingredient {name!r} has a non-boolean optional value"
+            )
+        description = raw_item.get("description") or ""
+        if not isinstance(description, str):
+            raise ValueError(f"Recipe ingredient {name!r} has a non-string description")
+        items.append(
+            {
+                "name": name,
+                "description": description,
+                "optional": optional,
+            }
+        )
+    return items
+
+
+def _find_recipe_item(raw_items: list[dict], item_id: int) -> tuple[int, dict]:
+    for index, item in enumerate(raw_items):
+        if item.get("id") == item_id:
+            return index, item
+    raise ValueError(f"Item {item_id} is not an ingredient of this recipe")
+
+
+def _validate_nonnegative_int(field: str, value: int) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{field} must be a non-negative integer")
+
+
 async def resolve_ingredient_items(
     client: KitchenOwlClient, ingredients: list[str | dict]
 ) -> list[RecipeItem]:
     """Resolve ingredient entries against the household item catalog,
     creating new catalog entries for unmatched names.
 
-    Each entry is either a bare name string (no quantity) or a dict
+    Each entry is either a bare name string (no quantity) or a dict. Dicts may
+    also set optional=true; optional defaults to false.
     {"name": ..., "amount": ..., "unit": ...} — amount/unit are folded into
     the item's description, the only place KitchenOwl's recipe-item schema
     has to carry quantity, mirroring the shopping-list item convention in
     client.py's add_shopping_item.
     """
     names = [_ingredient_name(e) for e in ingredients]
+    optional_values = [_ingredient_optional(e) for e in ingredients]
     catalog = await client.list_items() if names else []
     catalog_by_key: dict[str, dict] = {
         key: item
@@ -50,7 +98,9 @@ async def resolve_ingredient_items(
     }
 
     items = []
-    for entry, ingredient_name in zip(ingredients, names, strict=True):
+    for entry, ingredient_name, optional in zip(
+        ingredients, names, optional_values, strict=True
+    ):
         lookup_key = ingredient_name.lower().strip()
         existing = catalog_by_key.get(lookup_key)
         if existing:
@@ -72,6 +122,7 @@ async def resolve_ingredient_items(
             RecipeItem(
                 name=resolved.get("name", ingredient_name.strip()),
                 description=quantity,
+                optional=optional,
             )
         )
     return items
@@ -135,7 +186,8 @@ async def create_recipe(
     omitting amount/unit silently drops it, which is the #1 cause of
     imported recipes looking wrong in KitchenOwl (bare ingredient names with
     no measurements). "amount" and "unit" are optional within the dict (e.g.
-    {"name": "salt", "amount": "to taste"} is fine).
+    {"name": "salt", "amount": "to taste"} is fine). Dict ingredients may
+    also set optional=true; optional defaults to false.
     The tool looks up each name in the household item catalog and creates a
     new catalog entry if none matches. Steps are plain text strings in order.
     Tags are tag name strings. Returns the created recipe including its new id.
@@ -159,6 +211,12 @@ async def update_recipe(
     ingredients: list[str | dict] | None = None,
     steps: list[str] | None = None,
     tags: list[str] | None = None,
+    prep_time: int | None = None,
+    cook_time: int | None = None,
+    total_time: int | None = None,
+    yields: int | None = None,
+    source: str | None = None,
+    visibility: int | None = None,
 ) -> dict:
     """Update fields of an existing recipe in KitchenOwl.
 
@@ -170,11 +228,32 @@ async def update_recipe(
     each entry is either a bare name string (no quantity) or a dict
     {"name": "flour", "amount": "2", "unit": "cups"}; prefer the dict form
     whenever a quantity is known, since a bare name silently drops it.
+    Dict ingredients may set optional=true; optional defaults to false. For a
+    targeted change that automatically preserves every other ingredient, use
+    update_recipe_ingredient().
     Tags replace the full existing tag set (pass [] to clear all tags).
+    prep_time, cook_time, total_time, and yields are non-negative integers;
+    total_time maps to KitchenOwl's `time` field. visibility is 0 (private),
+    1 (shared by link), or 2 (public). source is the source name or URL.
     Use search_recipes() to find the recipe_id.
     """
     client = state.get_client()
     payload: dict = {}
+
+    for field, value in (
+        ("prep_time", prep_time),
+        ("cook_time", cook_time),
+        ("time", total_time),
+        ("yields", yields),
+    ):
+        if value is not None:
+            _validate_nonnegative_int(field, value)
+            payload[field] = value
+
+    if visibility is not None:
+        if isinstance(visibility, bool) or visibility not in (0, 1, 2):
+            raise ValueError("visibility must be 0 (private), 1 (link), or 2 (public)")
+        payload["visibility"] = visibility
 
     if name is not None:
         payload["name"] = name
@@ -196,7 +275,94 @@ async def update_recipe(
         items = await resolve_ingredient_items(client, ingredients)
         payload["items"] = [i.model_dump() for i in items]
 
+    if source is not None:
+        payload["source"] = source
+
+    if not payload:
+        raise ValueError("Provide at least one recipe field to update")
+
     return await client.update_recipe(recipe_id, payload)
+
+
+async def add_recipe_ingredient(
+    recipe_id: int,
+    name: str,
+    amount: str = "",
+    unit: str = "",
+    optional: bool = False,
+) -> dict:
+    """Add one ingredient without replacing the recipe's existing ingredients.
+
+    amount and unit are combined into KitchenOwl's quantity text. Set optional
+    to true when the ingredient is not required. The ingredient is resolved
+    against the household item catalog and created there if necessary.
+    Use get_recipe() first to find the recipe_id.
+    """
+    client = state.get_client()
+    current = await client.get_recipe(recipe_id)
+    raw_items = current.get("items") or []
+    if any(
+        (item.get("name") or "").casefold() == name.strip().casefold()
+        for item in raw_items
+    ):
+        raise ValueError(f"Recipe already contains ingredient {name!r}")
+
+    new_items = await resolve_ingredient_items(
+        client,
+        [{"name": name, "amount": amount, "unit": unit, "optional": optional}],
+    )
+    items = _recipe_items_for_write(raw_items)
+    items.append(new_items[0].model_dump())
+    return await client.update_recipe(recipe_id, {"items": items})
+
+
+async def update_recipe_ingredient(
+    recipe_id: int,
+    item_id: int,
+    optional: bool | None = None,
+    quantity: str | None = None,
+) -> dict:
+    """Change one existing recipe ingredient without altering the others.
+
+    Use get_recipe() to obtain both recipe_id and the ingredient's item_id.
+    Set optional to true or false to make the ingredient optional or required.
+    quantity replaces the complete quantity/note text stored for the ingredient
+    (for example "2 cups" or "to taste"); pass an empty string to clear it.
+    Omitted fields are preserved.
+    """
+    if optional is None and quantity is None:
+        raise ValueError("Provide optional and/or quantity to update")
+    if optional is not None and not isinstance(optional, bool):
+        raise ValueError("optional must be true or false")
+    if quantity is not None and not isinstance(quantity, str):
+        raise ValueError("quantity must be a string")
+
+    client = state.get_client()
+    current = await client.get_recipe(recipe_id)
+    raw_items = current.get("items") or []
+    index, _ = _find_recipe_item(raw_items, item_id)
+    items = _recipe_items_for_write(raw_items)
+    if optional is not None:
+        items[index]["optional"] = optional
+    if quantity is not None:
+        items[index]["description"] = quantity
+    return await client.update_recipe(recipe_id, {"items": items})
+
+
+async def remove_recipe_ingredient(recipe_id: int, item_id: int) -> dict:
+    """Remove one ingredient without altering the recipe's other ingredients.
+
+    Use get_recipe() to obtain both recipe_id and the ingredient's item_id.
+    This removes the ingredient only from the recipe; the household catalog
+    item itself is not deleted.
+    """
+    client = state.get_client()
+    current = await client.get_recipe(recipe_id)
+    raw_items = current.get("items") or []
+    index, _ = _find_recipe_item(raw_items, item_id)
+    items = _recipe_items_for_write(raw_items)
+    del items[index]
+    return await client.update_recipe(recipe_id, {"items": items})
 
 
 async def set_recipe_image(recipe_id: int, image_url: str) -> dict:
