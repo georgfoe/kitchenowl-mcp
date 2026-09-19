@@ -31,8 +31,9 @@ async def set_item_icon(item_id: int, icon: str | None) -> dict:
     """Set or clear the KitchenOwl icon for a household catalogue item.
 
     First call search_items to obtain the catalogue item's ID and inspect its
-    current icon. Pass null for icon to clear it. This manages KitchenOwl icon
-    identifiers; arbitrary image uploads are not supported for catalogue items.
+    current icon. Reuse an icon identifier returned by search_items so it is
+    known to exist in this KitchenOwl installation. Pass null for icon to clear
+    it. Arbitrary image uploads are not supported for catalogue items.
     """
     client = state.get_client()
     items = await client.list_items()
@@ -43,6 +44,8 @@ async def set_item_icon(item_id: int, icon: str | None) -> dict:
         icon = icon.strip()
         if not icon:
             raise ValueError("icon must be a non-empty string or null")
+        if len(icon) > 128:
+            raise ValueError("icon must be at most 128 characters")
 
     item = await client.update_item(item_id, {"icon": icon})
     return {"updated": True, "item": item}

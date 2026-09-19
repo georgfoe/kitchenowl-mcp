@@ -86,16 +86,14 @@ def test_search_items_with_empty_query_lists_catalogue() -> None:
 
 
 def test_set_item_icon_updates_household_item() -> None:
-    fake = FakeKitchenOwlClient(
-        [{"id": 1, "name": "Aufbackbrezeln", "icon": None}]
-    )
+    fake = FakeKitchenOwlClient([{"id": 1, "name": "Aufbackbrezeln", "icon": None}])
 
     with _active_client(fake):
-        result = asyncio.run(shopping.set_item_icon(1, " pretzel "))
+        result = asyncio.run(shopping.set_item_icon(1, " bread "))
 
-    assert fake.item_update_args == (1, {"icon": "pretzel"})
+    assert fake.item_update_args == (1, {"icon": "bread"})
     assert result["updated"] is True
-    assert result["item"]["icon"] == "pretzel"
+    assert result["item"]["icon"] == "bread"
 
 
 def test_set_item_icon_can_clear_icon() -> None:
@@ -125,6 +123,16 @@ def test_set_item_icon_rejects_blank_icon() -> None:
     with _active_client(fake):
         with pytest.raises(ValueError, match="non-empty string or null"):
             asyncio.run(shopping.set_item_icon(1, "  "))
+
+    assert fake.item_update_args is None
+
+
+def test_set_item_icon_rejects_oversized_icon() -> None:
+    fake = FakeKitchenOwlClient([{"id": 1, "name": "Brezeln", "icon": None}])
+
+    with _active_client(fake):
+        with pytest.raises(ValueError, match="at most 128 characters"):
+            asyncio.run(shopping.set_item_icon(1, "x" * 129))
 
     assert fake.item_update_args is None
 
@@ -199,9 +207,7 @@ def test_client_search_items_uses_kitchenowl_endpoint() -> None:
                 json=[{"id": 1, "name": "Kaffee", "icon": "coffee"}],
             )
 
-        client = KitchenOwlClient(
-            "https://kitchenowl.example", "token", household_id=3
-        )
+        client = KitchenOwlClient("https://kitchenowl.example", "token", household_id=3)
         await client.close()
         client._http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         try:
