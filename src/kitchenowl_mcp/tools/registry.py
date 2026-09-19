@@ -14,6 +14,8 @@ from .shopping import (
     add_shopping_list_items,
     clear_checked_items,
     get_shopping_list,
+    search_items,
+    set_item_icon,
     update_shopping_list_item,
 )
 
@@ -28,8 +30,10 @@ ALL_TOOLS = [
     list_tags,
     mark_recipe_made,
     audit_recipe_schema,
-    # Shopping list
+    # Shopping list and item catalogue
     get_shopping_list,
+    search_items,
+    set_item_icon,
     add_shopping_list_items,
     update_shopping_list_item,
     clear_checked_items,
