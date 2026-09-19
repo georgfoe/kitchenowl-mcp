@@ -10,6 +10,9 @@ DESTRUCTIVE_TOOLS: frozenset[str] = frozenset(
         "delete_category",
         "clear_checked_items",
         "update_recipe",
+        "add_recipe_ingredient",
+        "update_recipe_ingredient",
+        "remove_recipe_ingredient",
         "set_recipe_image",
     }
 )

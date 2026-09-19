@@ -16,6 +16,9 @@ Optionally also serves a small embedded browser chat (`/chat`, off by default) s
 | `get_recipe` | Fetch a recipe by ID (includes ingredients and steps) |
 | `create_recipe` | Create a new recipe with ingredients, steps, and tags |
 | `update_recipe` | Update a recipe's description, steps, or other fields |
+| `add_recipe_ingredient` | Add one ingredient without replacing the existing list |
+| `update_recipe_ingredient` | Change one ingredient's optional status or quantity |
+| `remove_recipe_ingredient` | Remove one ingredient without changing the others |
 | `set_recipe_image` | Download an HTTPS image and set it as a recipe's photo |
 | `list_tags` | List all household recipe tags |
 | `mark_recipe_made` | Log a cook event (sets `planned=true` on the recipe) |
@@ -133,7 +136,7 @@ src/kitchenowl_mcp/
   server.py      FastMCP app, lifespan, tool registration, optional chat ASGI wrapping
   tools/
     registry.py  ALL_TOOLS — single source of truth for /mcp registration + chat dispatch
-    recipes.py   search, get, create, update, set_image, list_tags, mark_made, delete, audit_schema
+    recipes.py   search, get, create/update recipes and ingredients, set_image, list_tags, mark_made, delete, audit_schema
     shopping.py  get_list, search_items, set_item_icon, add_items, update_item, clear_checked
     categories.py list, create, update/reorder, delete, assign items
     meal_plan.py get_plan, add_entry
@@ -146,9 +149,9 @@ src/kitchenowl_mcp/
 
 An embedded browser chat at `/chat`, off by default (`ENABLE_CHAT_UI=false`), for family members who don't have a claude.ai account. Same container, same port as `/mcp` — enabling it wraps the MCP app in a slightly larger Starlette app; `/mcp` itself is completely unaffected either way.
 
-- **Agent:** Anthropic Messages API, wired directly to the same 22 tool functions `/mcp` registers (in-process calls, not through MCP's JSON-RPC transport). Needs its own `ANTHROPIC_API_KEY` — separate, metered billing, not a reuse of any personal claude.ai/Claude subscription.
+- **Agent:** Anthropic Messages API, wired directly to the same tool functions `/mcp` registers (in-process calls, not through MCP's JSON-RPC transport). Needs its own `ANTHROPIC_API_KEY` — separate, metered billing, not a reuse of any personal claude.ai/Claude subscription.
 - **Login:** shared household password, Authentik OIDC SSO, or both — either is sufficient.
-- **Safety:** `delete_recipe`, `delete_category`, `clear_checked_items`, `update_recipe`, and `set_recipe_image` always stop and show a confirm/cancel prompt before executing — the agent can propose them but never runs them unconfirmed.
+- **Safety:** Recipe/category deletions, recipe and ingredient changes, clearing checked items, and setting recipe images always stop and show a confirm/cancel prompt before executing — the agent can propose them but never runs them unconfirmed.
 - **History:** ephemeral, in-memory only (lost on restart), bounded by a 24h TTL / 500-session cap so a long-running deployment doesn't grow unboundedly.
 - **UI niceties:** assistant replies render as real markdown (lists, bold, links, code — not raw `**`/`-` characters), an animated indicator shows while the agent is working, and a "New chat" button resets both the visible conversation and the server-side session state.
 

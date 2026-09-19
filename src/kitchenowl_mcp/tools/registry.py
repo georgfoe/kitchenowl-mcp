@@ -7,15 +7,18 @@ from .categories import (
 )
 from .meal_plan import add_meal_plan_entry, get_meal_plan
 from .recipes import (
+    add_recipe_ingredient,
     audit_recipe_schema,
     create_recipe,
     delete_recipe,
     get_recipe,
     list_tags,
     mark_recipe_made,
+    remove_recipe_ingredient,
     search_recipes,
     set_recipe_image,
     update_recipe,
+    update_recipe_ingredient,
 )
 from .shopping import (
     add_shopping_list_items,
@@ -32,6 +35,9 @@ ALL_TOOLS = [
     get_recipe,
     create_recipe,
     update_recipe,
+    add_recipe_ingredient,
+    update_recipe_ingredient,
+    remove_recipe_ingredient,
     set_recipe_image,
     delete_recipe,
     list_tags,
