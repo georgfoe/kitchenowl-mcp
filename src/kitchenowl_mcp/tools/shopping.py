@@ -5,7 +5,7 @@ from ..config import get_settings
 async def get_shopping_list() -> list[dict]:
     """Return all current items on the household shopping list.
 
-    Items include name, amount, unit, and whether they are checked off.
+    Items include name, amount, unit, icon, and whether they are checked off.
     """
     settings = get_settings()
     return await state.get_client().get_shopping_list_items(
@@ -13,11 +13,48 @@ async def get_shopping_list() -> list[dict]:
     )
 
 
+async def search_items(query: str = "") -> list[dict]:
+    """Search the household item catalogue, including each item's icon.
+
+    Pass a name or partial name to use KitchenOwl's fuzzy search. An empty query
+    returns the full catalogue. Search before adding a shopping-list item so an
+    existing item with a suitable icon can be reused.
+    """
+    client = state.get_client()
+    query = query.strip()
+    if query:
+        return await client.search_items(query)
+    return await client.list_items()
+
+
+async def set_item_icon(item_id: int, icon: str | None) -> dict:
+    """Set or clear the KitchenOwl icon for a household catalogue item.
+
+    First call search_items to obtain the catalogue item's ID and inspect its
+    current icon. Pass null for icon to clear it. This manages KitchenOwl icon
+    identifiers; arbitrary image uploads are not supported for catalogue items.
+    """
+    client = state.get_client()
+    items = await client.list_items()
+    if not any(item.get("id") == item_id for item in items):
+        raise ValueError(f"Item {item_id} was not found in the configured household")
+
+    if isinstance(icon, str):
+        icon = icon.strip()
+        if not icon:
+            raise ValueError("icon must be a non-empty string or null")
+
+    item = await client.update_item(item_id, {"icon": icon})
+    return {"updated": True, "item": item}
+
+
 async def add_shopping_list_items(items: list[dict]) -> dict:
     """Add one or more items to the household shopping list.
 
     Each item dict should include: name (required), amount (optional string),
-    unit (optional string). Example: [{"name": "milk", "amount": "2", "unit": "L"}]
+    unit (optional string). Search the catalogue first to reuse the exact name
+    of an existing item with an icon.
+    Example: [{"name": "milk", "amount": "2", "unit": "L"}]
     Returns a summary of added items.
     """
     settings = get_settings()
