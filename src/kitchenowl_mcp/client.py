@@ -119,9 +119,21 @@ class KitchenOwlClient:
         data = r.json()
         return data.get("items", data) if isinstance(data, dict) else data
 
+    async def search_items(self, query: str) -> list[dict]:
+        url = f"{self._base}/api/household/{self._household}/item/search"
+        r = await self._http.get(url, params={"query": query})
+        r.raise_for_status()
+        data = r.json()
+        return data.get("items", data) if isinstance(data, dict) else data
+
     async def create_item(self, payload: dict) -> dict:
         url = f"{self._base}/api/household/{self._household}/item"
         r = await self._http.post(url, json=payload)
+        r.raise_for_status()
+        return r.json()
+
+    async def update_item(self, item_id: int, payload: dict) -> dict:
+        r = await self._http.post(f"{self._base}/api/item/{item_id}", json=payload)
         r.raise_for_status()
         return r.json()
 
