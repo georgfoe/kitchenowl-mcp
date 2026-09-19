@@ -85,6 +85,7 @@ async def resolve_ingredient_items(
     client.py's add_shopping_item.
     """
     names = [_ingredient_name(e) for e in ingredients]
+    optional_values = [_ingredient_optional(e) for e in ingredients]
     catalog = await client.list_items() if names else []
     catalog_by_key: dict[str, dict] = {
         key: item
@@ -97,7 +98,9 @@ async def resolve_ingredient_items(
     }
 
     items = []
-    for entry, ingredient_name in zip(ingredients, names, strict=True):
+    for entry, ingredient_name, optional in zip(
+        ingredients, names, optional_values, strict=True
+    ):
         lookup_key = ingredient_name.lower().strip()
         existing = catalog_by_key.get(lookup_key)
         if existing:
@@ -119,7 +122,7 @@ async def resolve_ingredient_items(
             RecipeItem(
                 name=resolved.get("name", ingredient_name.strip()),
                 description=quantity,
-                optional=_ingredient_optional(entry),
+                optional=optional,
             )
         )
     return items
@@ -237,6 +240,21 @@ async def update_recipe(
     client = state.get_client()
     payload: dict = {}
 
+    for field, value in (
+        ("prep_time", prep_time),
+        ("cook_time", cook_time),
+        ("time", total_time),
+        ("yields", yields),
+    ):
+        if value is not None:
+            _validate_nonnegative_int(field, value)
+            payload[field] = value
+
+    if visibility is not None:
+        if isinstance(visibility, bool) or visibility not in (0, 1, 2):
+            raise ValueError("visibility must be 0 (private), 1 (link), or 2 (public)")
+        payload["visibility"] = visibility
+
     if name is not None:
         payload["name"] = name
 
@@ -257,23 +275,8 @@ async def update_recipe(
         items = await resolve_ingredient_items(client, ingredients)
         payload["items"] = [i.model_dump() for i in items]
 
-    for field, value in (
-        ("prep_time", prep_time),
-        ("cook_time", cook_time),
-        ("time", total_time),
-        ("yields", yields),
-    ):
-        if value is not None:
-            _validate_nonnegative_int(field, value)
-            payload[field] = value
-
     if source is not None:
         payload["source"] = source
-
-    if visibility is not None:
-        if isinstance(visibility, bool) or visibility not in (0, 1, 2):
-            raise ValueError("visibility must be 0 (private), 1 (link), or 2 (public)")
-        payload["visibility"] = visibility
 
     if not payload:
         raise ValueError("Provide at least one recipe field to update")

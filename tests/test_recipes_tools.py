@@ -14,6 +14,7 @@ class FakeKitchenOwlClient:
         self._recipe = recipe
         self._recipes = recipes if recipes is not None else ([recipe] if recipe else [])
         self.update_payload: dict | None = None
+        self.created_items: list[dict] = []
 
     async def get_recipe(self, recipe_id: int) -> dict:
         return self._recipe
@@ -32,6 +33,7 @@ class FakeKitchenOwlClient:
         return []
 
     async def create_item(self, payload: dict) -> dict:
+        self.created_items.append(payload)
         return payload
 
 
@@ -174,6 +176,21 @@ def test_update_recipe_rejects_invalid_metadata(
         with pytest.raises(ValueError, match=message):
             asyncio.run(recipes.update_recipe(1, **{field: value}))
 
+    assert client.update_payload is None
+
+
+def test_update_recipe_validates_before_resolving_ingredients() -> None:
+    with _active_client(_make_fake_client()) as client:
+        with pytest.raises(ValueError, match="visibility"):
+            asyncio.run(
+                recipes.update_recipe(
+                    1,
+                    ingredients=[{"name": "new ingredient"}],
+                    visibility=3,
+                )
+            )
+
+    assert client.created_items == []
     assert client.update_payload is None
 
 
@@ -343,6 +360,7 @@ def test_resolve_ingredient_items_rejects_non_boolean_optional() -> None:
                     client, [{"name": "berries", "optional": "yes"}]
                 )
             )
+        assert client.created_items == []
 
 
 def test_audit_flags_legacy_recipe_missing_ingredients_and_blank_item_name() -> None:
