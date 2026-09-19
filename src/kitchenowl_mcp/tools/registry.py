@@ -1,3 +1,10 @@
+from .categories import (
+    create_category,
+    delete_category,
+    list_categories,
+    set_item_category,
+    update_category,
+)
 from .meal_plan import add_meal_plan_entry, get_meal_plan
 from .recipes import (
     audit_recipe_schema,
@@ -37,6 +44,12 @@ ALL_TOOLS = [
     add_shopping_list_items,
     update_shopping_list_item,
     clear_checked_items,
+    # Item categories
+    list_categories,
+    create_category,
+    update_category,
+    delete_category,
+    set_item_category,
     # Meal plan
     get_meal_plan,
     add_meal_plan_entry,

@@ -22,8 +22,13 @@ Optionally also serves a small embedded browser chat (`/chat`, off by default) s
 | `delete_recipe` | Delete a recipe by ID |
 | `audit_recipe_schema` | Flag recipes not yet migrated to the `## Steps` description convention, missing ingredients, or with blank item names |
 | `get_shopping_list` | Read the current shopping list |
-| `search_items` | Search or list household catalogue items, including icons |
+| `search_items` | Search or list household catalogue items, including categories and icons |
 | `set_item_icon` | Set or clear a catalogue item's KitchenOwl icon |
+| `list_categories` | List item categories in their display order |
+| `create_category` | Create an item category |
+| `update_category` | Rename or reorder an item category |
+| `delete_category` | Delete a category and leave its items uncategorized |
+| `set_item_category` | Assign or clear an item's category |
 | `add_shopping_list_items` | Add items with optional amounts and units |
 | `update_shopping_list_item` | Change an existing item's amount and unit |
 | `clear_checked_items` | Remove checked items from the shopping list |
@@ -130,6 +135,7 @@ src/kitchenowl_mcp/
     registry.py  ALL_TOOLS — single source of truth for /mcp registration + chat dispatch
     recipes.py   search, get, create, update, set_image, list_tags, mark_made, delete, audit_schema
     shopping.py  get_list, search_items, set_item_icon, add_items, update_item, clear_checked
+    categories.py list, create, update/reorder, delete, assign items
     meal_plan.py get_plan, add_entry
   chat/          optional embedded browser chat (off by default, see below)
     sessions.py, dispatch.py, tool_schemas.py, agent.py, auth.py, middleware.py, routes.py
@@ -140,9 +146,9 @@ src/kitchenowl_mcp/
 
 An embedded browser chat at `/chat`, off by default (`ENABLE_CHAT_UI=false`), for family members who don't have a claude.ai account. Same container, same port as `/mcp` — enabling it wraps the MCP app in a slightly larger Starlette app; `/mcp` itself is completely unaffected either way.
 
-- **Agent:** Anthropic Messages API, wired directly to the same 17 tool functions `/mcp` registers (in-process calls, not through MCP's JSON-RPC transport). Needs its own `ANTHROPIC_API_KEY` — separate, metered billing, not a reuse of any personal claude.ai/Claude subscription.
+- **Agent:** Anthropic Messages API, wired directly to the same 22 tool functions `/mcp` registers (in-process calls, not through MCP's JSON-RPC transport). Needs its own `ANTHROPIC_API_KEY` — separate, metered billing, not a reuse of any personal claude.ai/Claude subscription.
 - **Login:** shared household password, Authentik OIDC SSO, or both — either is sufficient.
-- **Safety:** `delete_recipe`, `clear_checked_items`, `update_recipe`, and `set_recipe_image` always stop and show a confirm/cancel prompt before executing — the agent can propose them but never runs them unconfirmed.
+- **Safety:** `delete_recipe`, `delete_category`, `clear_checked_items`, `update_recipe`, and `set_recipe_image` always stop and show a confirm/cancel prompt before executing — the agent can propose them but never runs them unconfirmed.
 - **History:** ephemeral, in-memory only (lost on restart), bounded by a 24h TTL / 500-session cap so a long-running deployment doesn't grow unboundedly.
 - **UI niceties:** assistant replies render as real markdown (lists, bold, links, code — not raw `**`/`-` characters), an animated indicator shows while the agent is working, and a "New chat" button resets both the visible conversation and the server-side session state.
 

@@ -14,7 +14,7 @@ async def get_shopping_list() -> list[dict]:
 
 
 async def search_items(query: str = "") -> list[dict]:
-    """Search the household item catalogue, including each item's icon.
+    """Search the household item catalogue, including category and icon.
 
     Pass a name or partial name to use KitchenOwl's fuzzy search. An empty query
     returns the full catalogue. Search before adding a shopping-list item so an
