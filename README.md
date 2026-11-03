@@ -25,6 +25,7 @@ Optionally also serves a small embedded browser chat (`/chat`, off by default) s
 | `delete_recipe` | Delete a recipe by ID |
 | `audit_recipe_schema` | Flag recipes not yet migrated to the `## Steps` description convention, missing ingredients, or with blank item names |
 | `get_shopping_list` | Read the current shopping list |
+| `get_shopping_history` | Read up to 120 distinct recently removed items from the default list |
 | `search_items` | Search or list household catalogue items, including categories and icons |
 | `set_item_icon` | Set or clear a catalogue item's KitchenOwl icon |
 | `list_categories` | List item categories in their display order |
@@ -137,7 +138,7 @@ src/kitchenowl_mcp/
   tools/
     registry.py  ALL_TOOLS — single source of truth for /mcp registration + chat dispatch
     recipes.py   search, get, create/update recipes and ingredients, set_image, list_tags, mark_made, delete, audit_schema
-    shopping.py  get_list, search_items, set_item_icon, add_items, update_item, clear_checked
+    shopping.py  get_list, get_shopping_history, search_items, set_item_icon, add_items, update_item, clear_checked
     categories.py list, create, update/reorder, delete, assign items
     meal_plan.py get_plan, add_entry
   chat/          optional embedded browser chat (off by default, see below)
@@ -170,5 +171,6 @@ pytest
 
 ## Known gaps
 
+- `get_shopping_history(limit=50)` uses the household shopping-list endpoint's `recentItems` field with `recent_limit` (1–120). In KitchenOwl v0.7.10 this contains distinct recently removed items, newest first, excluding items currently on any shopping list. `description` holds the last removed quantity/note. Removed items may have been bought or simply deleted; the API exposes no purchase timestamps, prices, date filtering, or complete event history. Repeated removals are collapsed, so an empty result does not mean no purchases occurred.
 - `clear_checked_items` cannot be fully stress-tested end-to-end — there is no MCP tool to mark a shopping list item as checked. Add `check_shopping_item` to close the loop.
 - `mark_recipe_made` sets `planned=true` and appends to `planned_cooking_dates` rather than writing to a discrete cook-history log. This matches observed KitchenOwl API behavior.

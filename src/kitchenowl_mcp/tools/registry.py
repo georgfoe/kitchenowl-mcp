@@ -23,6 +23,7 @@ from .recipes import (
 from .shopping import (
     add_shopping_list_items,
     clear_checked_items,
+    get_shopping_history,
     get_shopping_list,
     search_items,
     set_item_icon,
@@ -45,6 +46,7 @@ ALL_TOOLS = [
     audit_recipe_schema,
     # Shopping list and item catalogue
     get_shopping_list,
+    get_shopping_history,
     search_items,
     set_item_icon,
     add_shopping_list_items,

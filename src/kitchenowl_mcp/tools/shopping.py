@@ -13,6 +13,25 @@ async def get_shopping_list() -> list[dict]:
     )
 
 
+async def get_shopping_history(limit: int = 50) -> list[dict]:
+    """Read recent shopping history for the configured default shopping list.
+
+    Returns up to limit distinct recently removed items, newest first, with
+    catalogue details and their last quantity/note in description. limit must
+    be between 1 and 120. Items currently on any shopping list are excluded by
+    KitchenOwl. Removal can mean purchased or simply deleted: these entries
+    do not prove a purchase. This is not a complete event log: repeated removals
+    are collapsed and the API provides no purchase dates, prices, or date
+    filters. An empty result means no eligible recent items, not no purchases.
+    """
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 120:
+        raise ValueError("limit must be an integer between 1 and 120")
+    settings = get_settings()
+    return await state.get_client().get_shopping_history(
+        settings.kitchenowl_default_list_id, limit
+    )
+
+
 async def search_items(query: str = "") -> list[dict]:
     """Search the household item catalogue, including category and icon.
 

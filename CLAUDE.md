@@ -64,7 +64,8 @@ kitchenowl-back  (existing KitchenOwl container)
 
 - All 13 MCP tools implemented and stress-tested (v3 run: 0 failures, 15 operations; `audit_recipe_schema` added after v3, not yet stress-tested):
   - Recipes: `search_recipes`, `get_recipe`, `create_recipe`, `update_recipe`, `list_tags`, `mark_recipe_made`, `delete_recipe`, `audit_recipe_schema`
-  - Shopping: `get_shopping_list`, `add_shopping_list_items`, `clear_checked_items`
+  - Shopping: `get_shopping_list`, `get_shopping_history`, `add_shopping_list_items`, `clear_checked_items`
+- `get_shopping_history(limit=50)` reads the default list's `recentItems` through the household endpoint (`recent_limit`, 1–120). KitchenOwl v0.7.10 returns distinct recently removed items and their last description, excluding items currently on any list. It does not expose a complete purchase log or purchase dates; removals can also be deletions. Do not infer purchase counts or dates from this result.
   - Meal plan: `get_meal_plan`, `add_meal_plan_entry`
 - KitchenOwl recipe item schema confirmed: `{name, description, optional}` only — `id` and `ordering` must be omitted
 - Canonical recipe schema defined in `models.py` (`Recipe`/`RecipeItem`): steps round-trip via a `## Steps` heading section appended to `description` (KitchenOwl has no native steps column) instead of being silently flattened in three different places; `get_recipe`/`search_recipes` return `steps` as a separate structured field and `tags` normalized to `list[str]` on both read and write
