@@ -74,6 +74,18 @@ class KitchenOwlClient:
                 return shopping_list.get("items", [])
         return []
 
+    async def get_shopping_history(self, list_id: int, limit: int = 50) -> list[dict]:
+        """Read recent removed items through the household-scoped list endpoint."""
+        url = f"{self._base}/api/household/{self._household}/shoppinglist"
+        r = await self._http.get(url, params={"recent_limit": limit})
+        r.raise_for_status()
+        for shopping_list in r.json():
+            if shopping_list.get("id") == list_id:
+                return shopping_list.get("recentItems", [])
+        raise ValueError(
+            f"Shopping list {list_id} was not found in the configured household"
+        )
+
     async def add_shopping_item(self, list_id: int, item: dict) -> dict:
         url = f"{self._base}/api/shoppinglist/{list_id}/add-item-by-name"
         description = f"{item.get('amount', '')} {item.get('unit', '')}".strip()
